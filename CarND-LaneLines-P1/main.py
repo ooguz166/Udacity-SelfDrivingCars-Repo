@@ -14,18 +14,18 @@ class lineDetector():
         self.outputPath = outputPath
         self.rho = 1
         self.theta = np.pi / 180
-        self.threshold = 20
-        self.min_line_length = 18
+        self.threshold = 10
+        self.min_line_length = 50
         self.max_line_gap = 1
-        self.kernel=3
-        self.yThres=340
+        self.kernel=7
+        self.yThres=329
         self.color=[255, 0, 0]
         self.colorb = [0, 255, 0]
-        self.thickness=13
+        self.thickness=10
         self.eps=0.00001
-        self.prevslope=[]
-        self.prevPosIntercept=[]
-
+        self.prevX1=[]
+        self.prevX2=[]
+        self.count=0
     def grayscale(self,img):
         return cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
@@ -38,7 +38,7 @@ class lineDetector():
     def region_of_interest(self,img):
         # defining a blank mask to start with
         mask = np.zeros_like(img)
-        vert=np.array([[(0,img.shape[0]),(465, 330), (475, 330), (img.shape[1],img.shape[0])]], dtype=np.int32)
+        vert=np.array([[(40,img.shape[0]),(460, 310), (490, 320), (img.shape[1]-20,img.shape[0])]], dtype=np.int32)
 
         # defining a 3 channel or 1 channel color to fill the mask with depending on the input image
         if len(img.shape) > 2:
@@ -91,7 +91,7 @@ class lineDetector():
                     positive_intercept.append(float(y1) - float(x1) * slope)
 
                 # Negative Slope with b value
-                elif (slope <= 0):
+                elif (slope < 0):
                     if math.isnan(float(y1) - float(x1) * slope):
                         continue
                     negative_coord = [x1, y1, x2, y2]
@@ -143,11 +143,12 @@ class lineDetector():
         otsu_thereshold, _ = cv2.threshold(blur_gray_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
         # Canny thresholds are around the otsu threshold
-        thr_1 = int(max(0, (0.8) * otsu_thereshold))
+        thr_1 = int(max(0, (0.37) * otsu_thereshold))
         thr_2 = int(min(255, (1.1) * otsu_thereshold))
         edge_img = self.canny(blur_gray_img, thr_1, thr_2)
 
         masked_img = self.region_of_interest(edge_img)
+        # plt.imsave("./dummy/"+str(self.count)+".jpg",masked_img)
 
         # Run Hough on edge detected image
 
@@ -155,10 +156,30 @@ class lineDetector():
 
         x1_pos, x2_pos, x1_neg, x2_neg = self.get_mean_xline_points(image, lines)
 
-        img_lines = np.zeros((masked_img.shape[0], masked_img.shape[1], 3), dtype=np.uint8)
+        if self.count ==0:
+            self.prevX1=x1_neg
+            self.prevX2=x2_neg
+        self.count = self.count + 1
 
-        cv2.line(img_lines, (int(x1_pos), int(masked_img.shape[0])), (int(x2_pos), int(self.yThres)), self.color, self.thickness)
-        cv2.line(img_lines, (int(x1_neg), int(masked_img.shape[0])), (int(x2_neg), int(self.yThres)), self.colorb, self.thickness)
+
+        if math.isnan(x2_neg):
+
+            img_lines = np.zeros((masked_img.shape[0], masked_img.shape[1], 3), dtype=np.uint8)
+
+            cv2.line(img_lines, (int(x1_pos), int(masked_img.shape[0])), (int(x2_pos), int(self.yThres)), self.color,
+                     self.thickness)
+            cv2.line(img_lines, (int(self.prevX1), int(masked_img.shape[0])), (int(self.prevX2), int(self.yThres)), self.colorb,
+                     self.thickness)
+        else:
+
+            img_lines = np.zeros((masked_img.shape[0], masked_img.shape[1], 3), dtype=np.uint8)
+
+            cv2.line(img_lines, (int(x1_pos), int(masked_img.shape[0])), (int(x2_pos), int(self.yThres)), self.color,
+                     self.thickness)
+            cv2.line(img_lines, (int(x1_neg), int(masked_img.shape[0])), (int(x2_neg), int(self.yThres)), self.colorb,
+                     self.thickness)
+
+
 
 
 
@@ -215,4 +236,3 @@ if __name__ == '__main__':
                 continue
             vidname=os.path.splitext(base)
             detector.line_detect_vid_pipeline(videoPath=vid,vidName=vidname[0],savePath="test_videos_output/")
-
